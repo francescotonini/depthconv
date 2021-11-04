@@ -9,17 +9,20 @@ if __name__ == '__main__':
     in_channels = 3
     out_channels = 12
 
-    device = torch.device('cpu')
-    # device = torch.device('cuda', 0)
+    #device = torch.device('cpu')
+    device = torch.device('cuda', 0)
 
     images = torch.rand((batch_size, in_channels, 512, 512)).to(device)
-    depths = torch.zeros((batch_size, in_channels, 512, 512)).to(device)
-    weights = torch.ones((out_channels, in_channels, 2, 2)).to(device)
+    depths = torch.ones((batch_size, 1, 512, 512)).to(device)
+    weights = torch.rand((out_channels, in_channels, 3, 3)).to(device)
     bias = None
     stride = 1
     padding = 0
     dilation = 1
     # TODO: groups
+
+    # CUDA warmup...
+    _ = F.conv2d(images, weights, bias=bias, stride=stride, padding=padding, dilation=dilation)
 
     start = time.time()
     torch_output = F.conv2d(images, weights, bias=bias, stride=stride, padding=padding, dilation=dilation)

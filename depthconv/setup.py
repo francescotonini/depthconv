@@ -2,10 +2,12 @@ from setuptools import setup
 from torch.utils.cpp_extension import BuildExtension, CUDAExtension
 
 setup(
-    name='conv_cuda',
+    name='depthconv_cuda',
     ext_modules=[
-        CUDAExtension('conv_cuda',
-                      sources=['conv_cuda.cpp']),
+        CUDAExtension('depthconv_cuda', [
+            'depthconv_cuda.cpp',
+            'depthconv_cuda_kernel.cu'
+        ])
     ],
     cmdclass={
         'build_ext': BuildExtension

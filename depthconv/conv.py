@@ -1,23 +1,28 @@
 import torch
 import torch.nn as nn
+from torch.nn.modules.utils import _pair
 import torch.autograd as autograd
-import conv_cuda
+import depthconv_cuda
 
 
 class DepthConvFunction(autograd.Function):
     @staticmethod
-    def forward(ctx, input, depth, weights, bias, stride, padding, dilation):
-        ctx.save_for_backward(input, depth, weights, bias, autograd.Variable(torch.Tensor([stride, padding, dilation])).cuda())
+    def forward(ctx, input, depth, weight, bias=None, padding=1, stride=1, dilation=1):
+        (padding_w, padding_h) = padding = _pair(padding)
+        (stride_w, stride_h) = stride = _pair(stride)
+        (dilation_w, dilation_h) = dilation = _pair(dilation)
 
-        return conv_cuda.forward(input, depth, weights, bias, stride, stride, padding, padding, dilation)
+        ctx.save_for_backward(input, depth, weight, bias, padding, stride, dilation)
+
+        return depthconv_cuda.forward(input, depth, weight, bias, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, depth, weights, bias, (stride, padding, dilation) = ctx.saved_tensors
+        input, depth, weight, bias, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w = ctx.saved_tensors
 
-        grad_input, grad_weight, grad_bias = conv_cuda.backward(input, depth, grad_output, weights, stride, stride, padding, padding, dilation)
+        grad_input, grad_weight, grad_bias = depthconv_cuda.backward(input, depth, weight, bias, grad_output, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)
 
-        return grad_input, grad_weight, grad_bias, autograd.Variable(torch.zeros(6))
+        return grad_input, None, grad_weight, grad_bias, None
 
 class DepthConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, stride=1, dilation=1, bias=None):

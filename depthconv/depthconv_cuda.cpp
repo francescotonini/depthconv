@@ -1,6 +1,6 @@
 #include <vector>
 #include <torch/extension.h>
-#include <torch/types.h
+#include <torch/types.h>
 
 // CUDA declarations
 void depthconv_im2col(torch::Tensor data_im, torch::Tensor data_depth, int64_t channels, int64_t height, int64_t width, int64_t ksize_h, int64_t ksize_w, int64_t pad_h, int64_t pad_w, int64_t stride_h, int64_t stride_w, int64_t dilation_h, int64_t dilation_w, torch::Tensor data_col);

@@ -25,7 +25,8 @@ torch::Tensor depthconv_forward(torch::Tensor input, torch::Tensor depth, torch:
     int64_t input_width = input.size(3);
     int64_t kernel_height = weight.size(3);
     int64_t kernel_width = weight.size(2);
-    int64_t output_height = (input_height + 2 * padding_height - (dilation_height * (kernel_height - 1) + 1)) / dilation_height + 1;
+
+    int64_t output_height = (input_height + 2 * padding_height - (dilation_height * (kernel_height - 1) + 1)) / stride_height + 1;
     int64_t output_width = (input_width + 2 * padding_width - (dilation_width * (kernel_width - 1) + 1)) / dilation_width + 1;
 
     torch::Tensor output = torch::zeros(torch::IntArrayRef({batch_size, output_channels, output_height, output_width})).cuda();
@@ -44,9 +45,9 @@ torch::Tensor depthconv_forward(torch::Tensor input, torch::Tensor depth, torch:
         this_output.add_(bias.mm(ones).reshape(torch::IntArrayRef({output_channels, output_height, output_width})).cuda(), 1);
 
         // Kernel call
-        // TODO: return columns
         depthconv_im2col(this_input, this_depth, input_channels, input_height, input_width, kernel_height, kernel_width, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width, columns);
 
+        // Add output
         this_output.add_(weight.mm(columns).reshape(torch::IntArrayRef({output_channels, output_height, output_width})).cuda(), 1);
     }
 

@@ -12,17 +12,17 @@ import time
 if __name__ == '__main__':
     print()
 
-    batch_size = 12
+    batch_size = 1
     in_channels = 3
-    out_channels = 12
+    out_channels = 3
 
     #device = torch.device('cpu')
     device = torch.device('cuda', 0)
 
     images = torch.rand((batch_size, in_channels, 512, 512)).to(device)
     depths = torch.ones((batch_size, 1, 512, 512)).to(device)
-    weights = nn.Parameter(torch.empty(out_channels, in_channels, 3, 3).to(device))
-    bias = nn.Parameter(torch.empty(out_channels).cuda())
+    weights = nn.Parameter(torch.ones(out_channels, in_channels, 3, 3).to(device))
+    bias = nn.Parameter(torch.ones(out_channels).cuda())
     stride = 1
     padding = 0
     dilation = 1
@@ -38,7 +38,7 @@ if __name__ == '__main__':
 
     # My implementation
     start = time.time()
-    my_output = DepthConvFunction.apply(images, depths, weights, bias, stride, padding, dilation)
+    my_output = DepthConvFunction.apply(images, depths, weights, bias, padding, stride, dilation)
     print(f'This implementation: {time.time() - start}')
 
     print()

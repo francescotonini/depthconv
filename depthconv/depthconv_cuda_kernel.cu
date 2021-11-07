@@ -2,6 +2,8 @@
 #include <cuda.h>
 #include <cuda_runtime.h>
 
+#define CUDA_NUM_THREADS 1024
+
 // TODO: add explanation
 // https://stackoverflow.com/questions/37566987/cuda-atomicadd-for-doubles-definition-error
 // https://pytorch.org/docs/stable/cpp_extension.html
@@ -39,14 +41,16 @@ __device__ scalar_t get_gradient_weight(scalar_t argmax_h, scalar_t argmax_w, in
     if (argmax_h_low >= height - 1) {
         argmax_h_high = argmax_h_low = height - 1;
         argmax_h = (scalar_t)argmax_h_low;
-    } else {
+    }
+    else {
         argmax_h_high = argmax_h_low + 1;
     }
 
     if (argmax_w_low >= width - 1) {
         argmax_w_high = argmax_w_low = width - 1;
         argmax_w = (scalar_t)argmax_w_low;
-    } else {
+    }
+    else {
         argmax_w_high = argmax_w_low + 1;
     }
 
@@ -54,13 +58,16 @@ __device__ scalar_t get_gradient_weight(scalar_t argmax_h, scalar_t argmax_w, in
     if (h == argmax_h_low) {
         if (w == argmax_w_low) {
             weight = (h + 1 - argmax_h) * (w + 1 - argmax_w);
-        } else if (w == argmax_w_high) {
+        }
+        else if (w == argmax_w_high) {
             weight = (h + 1 - argmax_h) * (argmax_w + 1 - w);
         }
-    } else if (h == argmax_h_high) {
+    }
+    else if (h == argmax_h_high) {
         if (w == argmax_w_low) {
             weight = (argmax_h + 1 - h) * (w + 1 - argmax_w);
-        } else if (w == argmax_w_high) {
+        }
+        else if (w == argmax_w_high) {
             weight = (argmax_h + 1 - h) * (argmax_w + 1 - w);
         }
     }
@@ -91,8 +98,6 @@ __global__ void depthconv_im2col_gpu_kernel(int64_t n, scalar_t *data_im, scalar
         else {
             valid = false;
         }
-        // scalar_t Di = data_depth[(h_in + (kernel_h - 1) / 2 + dilation_h - 1)
-        // * width + (w_in + (kernel_w - 1) / 2 + dilation_w - 1)];
 
         for (int i = 0; i < kernel_h; ++i) {
             for (int j = 0; j < kernel_w; ++j) {
@@ -109,14 +114,7 @@ __global__ void depthconv_im2col_gpu_kernel(int64_t n, scalar_t *data_im, scalar
                     if (valid) {
                         Dval = data_depth_ptr[map_h * width + map_w];
                     }
-                    
-                    // printf("%f,%d\n",Dval,h_in * width + w_in+map_h * width + map_w -
-                    // ((h_in + (kernel_h - 1) / 2 + dilation_h - 1) * width + (w_in +
-                    // (kernel_w - 1) / 2 + dilation_w - 1)));
-                    // printf("Di-Dval: %f, %f\n", Di, Dval);
-                    // if (exp(-abs(Di - Dval))<0.2)
-                    //	printf("Di-Dval: %f\n", exp(-abs(Di - Dval)));
-                    
+
                     val *= exp(-abs(Di - Dval));
                 }
 
@@ -135,18 +133,16 @@ __global__ void depthconv_col2im_gpu_kernel(int n, scalar_t *data_col, scalar_t 
             int j = (ii_index / width_col / height_col) % kernel_w;
             int i = (ii_index / width_col / height_col / kernel_w) % kernel_h;
             int c = ii_index / width_col / height_col / kernel_w / kernel_h;
+
             // compute the start and end of the output
             int w_out = ii_index % width_col;
             int h_out = (ii_index / width_col) % height_col;
             int w_in = w_out * stride_w - pad_w;
             int h_in = h_out * stride_h - pad_h;
 
-            // scalar_t cur_inv_h_data = h_in + i * dilation_h;
-            // scalar_t cur_inv_w_data = w_in + j * dilation_w;
-
             scalar_t cur_top_grad = data_col[ii_index];
-            int cur_h = h_in + i * dilation_h; //(int)cur_inv_h_data;
-            int cur_w = w_in + j * dilation_w; //(int)cur_inv_w_data;
+            int cur_h = h_in + i * dilation_h;
+            int cur_w = w_in + j * dilation_w;
 
             scalar_t Di = 0.;
             bool valid = true;
@@ -157,30 +153,14 @@ __global__ void depthconv_col2im_gpu_kernel(int n, scalar_t *data_col, scalar_t 
                 valid = false;
             }
 
-            //      scalar_t Di = data_depth[(h_in + dilation_h * (kernel_h - 1) /
-            //      2) * width + w_in  + dilation_w * (kernel_w - 1) / 2];
-            // scalar_t Di = data_depth[(h_in + (kernel_h - 1) / 2 + dilation_h -
-            // 1) * width + w_in  + (kernel_w - 1) / 2 + dilation_w - 1];
-            // printf("%d\n",(h_in + dilation_h * (kernel_h - 1) / 2) * width + w_in
-            // + dilation_w * (kernel_w - 1) / 2); data_depth[cur_h * width + cur_w];
-            // data_depth[(h_in + (kernel_h - 1) / 2 + dilation_h - 1) * width + w_in
-            // + (kernel_w - 1) / 2 + dilation_w - 1];
-
             int cur_bottom_grad_pos = (c * height + cur_h) * width + cur_w;
             int cur_bottom_depth_pos = (cur_h)*width + cur_w;
-
-            // printf("%d,%d,%d,%d\n",i,j,((h_in + dilation_h * (kernel_h - 1) / 2) *
-            // width + w_in  + dilation_w * (kernel_w - 1) /
-            // 2-cur_bottom_depth_pos),dilation_h); printf("%d\n",((h_in + dilation_h *
-            // (kernel_h - 1) / 2) * width + w_in  + dilation_w * (kernel_w - 1) /
-            // 2-cur_bottom_depth_pos));
 
             scalar_t Dval = 0.;
             if (valid) {
                 Dval = data_depth[cur_bottom_depth_pos];
             }
 
-            // TODO: fix this!
             if (cur_h >= 0 && cur_h < height && cur_w >= 0 && cur_w < width) {
                 atomicAdd(grad_im + cur_bottom_grad_pos, cur_top_grad * exp(-abs(Di - Dval)));
             }
@@ -193,11 +173,11 @@ void depthconv_im2col(torch::Tensor data_im, torch::Tensor data_depth, int64_t c
     // kernel responsible for copying a single-channel grid.
     int64_t height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
     int64_t width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;
-    int64_t num_kernels = channels * height_col * width_col;
-    int64_t num_blocks = (num_kernels + 1024 - 1) / 1024;
+    int num_kernels = channels * height_col * width_col;
+    int num_blocks = (num_kernels + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
 
     AT_DISPATCH_FLOATING_TYPES(data_im.type(), "depthconv_im2col", ([&] {
-        depthconv_im2col_gpu_kernel<scalar_t><<<num_blocks, num_kernels>>>(
+        depthconv_im2col_gpu_kernel<scalar_t><<<num_blocks, CUDA_NUM_THREADS>>>(
             num_kernels,
             data_im.data<scalar_t>(),
             data_depth.data<scalar_t>(),
@@ -229,10 +209,10 @@ void depthconv_col2im(torch::Tensor data_col, torch::Tensor data_depth, int64_t 
     // To avoid involving atomic operations, we will launch one kernel per
     // bottom dimension, and then in the kernel add up the top dimensions.
     int64_t num_kernels = channels * height_col * width_col;
-    int64_t num_blocks = (num_kernels + 1024 - 1) / 1024;
+    int64_t num_blocks = (num_kernels + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
 
     AT_DISPATCH_FLOATING_TYPES(data_col.type(), "depthconv_col2im", ([&] {
-        depthconv_col2im_gpu_kernel<scalar_t><<<num_blocks, num_kernels>>>(
+        depthconv_col2im_gpu_kernel<scalar_t><<<num_blocks, CUDA_NUM_THREADS>>>(
             num_kernels,
             data_col.data<scalar_t>(),
             data_depth.data<scalar_t>(),

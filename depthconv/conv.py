@@ -25,14 +25,15 @@ class DepthConvFunction(autograd.Function):
         padding = ctx.padding
         stride = ctx.stride
         dilation = ctx.dilation
-
         (padding_w, padding_h) = padding = _pair(padding)
         (stride_w, stride_h) = stride = _pair(stride)
         (dilation_w, dilation_h) = dilation = _pair(dilation)
 
-        grad_input, grad_weight, grad_bias = depthconv_cuda.backward(input, depth, weight, bias, grad_output, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)
+        grad_input = depthconv_cuda.backward(input, depth, weight, bias, grad_output, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)[0]
 
-        return grad_input, None, grad_weight, grad_bias, None, None, None, None
+        print('aaa')
+
+        return grad_input, None, None, None, None, None, None, None
 
 class DepthConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, stride=1, dilation=1, bias=None):

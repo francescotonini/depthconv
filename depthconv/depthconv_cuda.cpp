@@ -68,18 +68,21 @@ torch::Tensor backward_grad_input(torch::Tensor input, torch::Tensor depth, torc
     int64_t output_width = grad_output.size(3);
 
     torch::Tensor grad_input = torch::zeros(torch::IntArrayRef({batch_size, output_channels, output_height, output_width})).cuda();
-    torch::Tensor grad_columns = torch::zeros(torch::IntArrayRef({input_channels * kernel_width * kernel_height, output_height * output_width})).cuda();
+    torch::Tensor columns = torch::zeros(torch::IntArrayRef({input_channels * kernel_width * kernel_height, output_height * output_width})).cuda();
 
-    torch::Tensor weight_ = weight.clone();
-    weight = weight.reshape(torch::IntArrayRef({output_channels, input_channels * kernel_width * kernel_height})).cuda();
+    // torch::Tensor weight_ = weight.clone();
+    // weight = weight.reshape(torch::IntArrayRef({output_channels, input_channels * kernel_width * kernel_height})).cuda();
 
     for (int i = 0; i < batch_size; i++) {
-        torch::Tensor this_grad_input = grad_input[i].clone();
-        torch::Tensor this_depth = depth[i].clone();
-        torch::Tensor this_grad_output = grad_output[i].reshape(torch::IntArrayRef({output_channels, output_height * output_width})).cuda();
-        torch::Tensor this_grad_columns = weight.mm(this_grad_output).cuda();
+        torch::Tensor this_grad_input = grad_input[i];
+        torch::Tensor this_depth = depth[i];
+        torch::Tensor this_grad_output = grad_output[i]; // .reshape(torch::IntArrayRef({output_channels, output_height * output_width})).cuda();
 
-        depthconv_col2im(this_grad_columns, this_depth, input_channels, input_height, input_width, kernel_height, kernel_width, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width, this_grad_input);
+        this_grad_output.add_(weight.mm(columns).reshape(torch::IntArrayRef({output_channels, output_height, output_width})).cuda(), 1);
+
+        // torch::Tensor this_grad_columns = weight.mm(this_grad_output).cuda();
+
+        depthconv_col2im(columns, this_depth, input_channels, input_height, input_width, kernel_height, kernel_width, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width, this_grad_input);
     }
 
     return grad_input;
@@ -132,12 +135,12 @@ std::vector<torch::Tensor> depthconv_backward(torch::Tensor input, torch::Tensor
     CHECK_INPUT(grad_output);
 
     torch::Tensor grad_input = backward_grad_input(input, depth, grad_output, weight, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width);
-    std::vector<torch::Tensor> grad_params = backward_grad_parameters(input, depth, grad_output, weight, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width);
+    // std::vector<torch::Tensor> grad_params = backward_grad_parameters(input, depth, grad_output, weight, padding_height, padding_width, stride_height, stride_width, dilation_height, dilation_width);
 
     return {
-        grad_input,
-        grad_params[0], // Weight
-        grad_params[1] // Bias
+        grad_input//,
+        // grad_params[0], // Weight
+        // grad_params[1] // Bias
     };
 }
 

@@ -8,7 +8,8 @@ import depthconv_cuda
 class DepthConvFunction(autograd.Function):
     @staticmethod
     def forward(ctx, input, depth, weight, bias=None, padding=0, stride=1, dilation=1):
-        ctx.save_for_backward(input, depth, weight, bias)
+        ctx.save_for_backward(input, weight, bias)
+        ctx.depth = depth
         ctx.padding = padding
         ctx.stride = stride
         ctx.dilation = dilation
@@ -21,7 +22,8 @@ class DepthConvFunction(autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        input, depth, weight, bias = ctx.saved_tensors
+        input, weight, bias = ctx.saved_tensors
+        depth = ctx.depth
         padding = ctx.padding
         stride = ctx.stride
         dilation = ctx.dilation
@@ -29,11 +31,9 @@ class DepthConvFunction(autograd.Function):
         (stride_w, stride_h) = stride = _pair(stride)
         (dilation_w, dilation_h) = dilation = _pair(dilation)
 
-        grad_input = depthconv_cuda.backward(input, depth, weight, bias, grad_output, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)[0]
+        grad_input, grad_weight, grad_bias = depthconv_cuda.backward(input, depth, weight, bias, grad_output, padding_h, padding_w, stride_h, stride_w, dilation_h, dilation_w)
 
-        print('aaa')
-
-        return grad_input, None, None, None, None, None, None, None
+        return grad_input, None, grad_weight, grad_bias, None, None, None, None
 
 class DepthConv(nn.Module):
     def __init__(self, in_channels, out_channels, kernel_size=3, padding=1, stride=1, dilation=1, bias=None):

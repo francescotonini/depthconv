@@ -32,13 +32,13 @@ __global__ void avgpool_forward_kernel(const int nthreads, const Dtype* const bo
             for (int w = wstart; w < wend; ++w) {
                 Acctype Dval = bottom_data_depth[h * width + w];
                 Acctype weight_val = exp(-abs(Di - Dval));
-            //        divcount += weight_val;
+
                 pool_size -= (1. - weight_val);
                 aveval += (bottom_slice[h * width + w] * weight_val);
             }
         }
-        depth_weight_count[ih * width + iw] = pool_size;//divcount;
-        top_data[index] = Dtype(aveval / pool_size);//((hend - hstart) * (wend - wstart)));//ScalarConvert<Acctype, Dtype>::to(aveval / ((hend - hstart) * (wend - wstart)));
+        depth_weight_count[ih * width + iw] = pool_size;
+        top_data[index] = Dtype(aveval / pool_size);
     }
 }
 
@@ -69,31 +69,31 @@ __global__ void avgpool_backward_kernel(const int nthreads, const Dtype* const t
 
         for (int ph = phstart; ph < phend; ++ph) {
             for (int pw = pwstart; pw < pwend; ++pw) {
-            // figure out the pooling size
-            int hstart = ph * stride_h - pad_h;
-            int wstart = pw * stride_w - pad_w;
-            int hend = min(hstart + kernel_h, height + pad_h);
-            int wend = min(wstart + kernel_w, width + pad_w);
-            Dtype weight_count = (hend - hstart) * (wend - wstart);
-            hstart = max(hstart, 0);
-            wstart = max(wstart, 0);
-            hend = min(hend, height);
-            wend = min(wend, width);
+                // figure out the pooling size
+                int hstart = ph * stride_h - pad_h;
+                int wstart = pw * stride_w - pad_w;
+                int hend = min(hstart + kernel_h, height + pad_h);
+                int wend = min(wstart + kernel_w, width + pad_w);
+                Dtype weight_count = (hend - hstart) * (wend - wstart);
+                hstart = max(hstart, 0);
+                wstart = max(wstart, 0);
+                hend = min(hend, height);
+                wend = min(wend, width);
 
-            int ih = (hstart + hend) / 2;
-            int iw = (wstart + wend) / 2;
-            Acctype Di = bottom_data_depth[ih * width + iw];
-            Acctype weight_val = 1.;//
-            if(valid && depth_weight_count[ih * width + iw]==0){
-                weight_val = exp(-abs(Di - Dval));
-                weight_count = depth_weight_count[ih * width + iw];
-            }
+                int ih = (hstart + hend) / 2;
+                int iw = (wstart + wend) / 2;
+                Acctype Di = bottom_data_depth[ih * width + iw];
+                Acctype weight_val = 1.;//
+                if(valid && depth_weight_count[ih * width + iw]==0){
+                    weight_val = exp(-abs(Di - Dval));
+                    weight_count = depth_weight_count[ih * width + iw];
+                }
 
-            gradient += top_diff_slice[ph * pooled_width + pw] * weight_val / weight_count;//((hend - hstart) * (wend - wstart));
+                gradient += top_diff_slice[ph * pooled_width + pw] * weight_val / weight_count;
             }
         }
 
-        bottom_diff[index] = Dtype(gradient);//ScalarConvert<Acctype, Dtype>::to(gradient);
+        bottom_diff[index] = Dtype(gradient);
     }
 }
 
@@ -132,7 +132,7 @@ void avgpool_forward(int count, torch::Tensor input_data, torch::Tensor input_de
 void avgpool_backward(int count, torch::Tensor grad_output, torch::Tensor input_depth, torch::Tensor depth_weight_count, int channels, int height, int width, int pooled_height, int pooled_width, int kernel_h, int kernel_w, int stride_h, int stride_w, int pad_h, int pad_w, torch::Tensor bottom_diff) {
     int num_blocks = (count + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
 
-    AT_DISPATCH_FLOATING_TYPES(grad_output.type(), "avgpool_backward ", ([&] {
+    AT_DISPATCH_FLOATING_TYPES(grad_output.type(), "avgpool_backward", ([&] {
         avgpool_backward_kernel<scalar_t, scalar_t><<<num_blocks, CUDA_NUM_THREADS>>>(
             count,
             grad_output.data<scalar_t>(),

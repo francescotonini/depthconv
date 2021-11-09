@@ -4,9 +4,9 @@
 
 #define CUDA_NUM_THREADS 1024
 
-// TODO: add explanation
-// https://stackoverflow.com/questions/37566987/cuda-atomicadd-for-doubles-definition-error
-// https://pytorch.org/docs/stable/cpp_extension.html
+// This overload of atomicAdd has been introduced with sm60. Since PyTorch tries to compile the module for all compute capabilities,
+// a fallback when sm < 60 is required.
+// Credits: https://stackoverflow.com/questions/37566987/cuda-atomicadd-for-doubles-definition-error
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 600
 #else
 __device__ double atomicAdd(double *address, double val)

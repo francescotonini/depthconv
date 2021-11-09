@@ -13,14 +13,13 @@ class DepthConvFunction(autograd.Function):
         ctx.stride = stride
         ctx.padding = padding
         ctx.dilation = dilation
-        ctx.has_bias = True
+        ctx.has_bias = has_bias
 
-        (stride_w, stride_h) = stride = _pair(stride)
-        (padding_w, padding_h) = padding = _pair(padding)
-        (dilation_w, dilation_h) = dilation = _pair(dilation)
+        (stride_w, stride_h) = _pair(stride)
+        (padding_w, padding_h) = _pair(padding)
+        (dilation_w, dilation_h) = _pair(dilation)
 
-        return depthconv_cuda.forward(input, depth, weight, bias, stride_h, stride_w, padding_h, padding_w,
-                                      dilation_h, dilation_w, has_bias)
+        return depthconv_cuda.forward(input, depth, weight, bias, stride_h, stride_w, padding_h, padding_w, dilation_h, dilation_w, has_bias)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -30,13 +29,12 @@ class DepthConvFunction(autograd.Function):
         padding = ctx.padding
         dilation = ctx.dilation
         has_bias = ctx.has_bias
-        (stride_w, stride_h) = stride = _pair(stride)
-        (padding_w, padding_h) = padding = _pair(padding)
-        (dilation_w, dilation_h) = dilation = _pair(dilation)
 
-        grad_input, grad_weight, grad_bias = depthconv_cuda.backward(input, depth, weight, bias, grad_output, stride_h,
-                                                                     stride_w, padding_h, padding_w, dilation_h,
-                                                                     dilation_w, has_bias)
+        (stride_w, stride_h) = _pair(stride)
+        (padding_w, padding_h) = _pair(padding)
+        (dilation_w, dilation_h) = _pair(dilation)
+
+        grad_input, grad_weight, grad_bias = depthconv_cuda.backward(input, depth, weight, bias, grad_output, stride_h, stride_w, padding_h, padding_w, dilation_h, dilation_w, has_bias)
 
         return grad_input, None, grad_weight, grad_bias, None, None, None, None
 
@@ -56,5 +54,4 @@ class DepthConv(nn.Module):
         self.bias = nn.Parameter(torch.empty(out_channels).cuda())
 
     def forward(self, input, depth):
-        return DepthConvFunction.apply(input, depth, self.weights, self.bias, self.stride, self.padding,
-                                       self.dilation, self.has_bias)
+        return DepthConvFunction.apply(input, depth, self.weights, self.bias, self.stride, self.padding, self.dilation, self.has_bias)

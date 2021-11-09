@@ -1,1 +1,1 @@
-from .pooling import DepthAvgPoolingFunction
+from .pooling import DepthAvgPoolingFunction, DepthAvgPooling

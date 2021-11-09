@@ -1,1 +1,1 @@
-from .conv import DepthConvFunction
+from .conv import DepthConvFunction, DepthConv

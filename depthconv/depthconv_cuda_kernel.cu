@@ -76,7 +76,7 @@ __device__ scalar_t get_gradient_weight(scalar_t argmax_h, scalar_t argmax_w, in
 }
 
 template <typename scalar_t>
-__global__ void depthconv_im2col_gpu_kernel(int64_t n, scalar_t *data_im, scalar_t *data_depth, int64_t height, int64_t width, int64_t kernel_h, int64_t kernel_w, int64_t pad_h, int64_t pad_w, int64_t stride_h, int64_t stride_w, int64_t dilation_h, int64_t dilation_w, int64_t height_col, int64_t width_col, scalar_t *data_col) {
+__global__ void depthconv_im2col_gpu_kernel(int n, scalar_t *data_im, scalar_t *data_depth, int height, int width, int kernel_h, int kernel_w, int stride_h, int stride_w, int pad_h, int pad_w, int dilation_h, int dilation_w, int height_col, int width_col, scalar_t *data_col) {
     // CxHxW --> (khxkw)x(CxHxW)
     for (int index = blockIdx.x * blockDim.x + threadIdx.x; index < n; index += blockDim.x * gridDim.x) {
         int w_col = index % width_col;
@@ -126,7 +126,7 @@ __global__ void depthconv_im2col_gpu_kernel(int64_t n, scalar_t *data_im, scalar
 }
 
 template <typename scalar_t>
-__global__ void depthconv_col2im_gpu_kernel(int n, scalar_t *data_col, scalar_t *data_depth, int channels, int height, int width, int kernel_h, int kernel_w, int pad_h, int pad_w, int stride_h, int stride_w, int dilation_h, int dilation_w, int height_col, int width_col, scalar_t *grad_im) {
+__global__ void depthconv_col2im_gpu_kernel(int n, scalar_t *data_col, scalar_t *data_depth, int channels, int height, int width, int kernel_h, int kernel_w, int stride_h, int stride_w, int pad_h, int pad_w, int dilation_h, int dilation_w, int height_col, int width_col, scalar_t *grad_im) {
     for (int index = blockIdx.x * blockDim.x + threadIdx.x; index < n; index += blockDim.x * gridDim.x) {
         for (int ii = 0; ii < kernel_h * kernel_w; ii++) {
             int ii_index = ii + index * kernel_h * kernel_w;
@@ -168,11 +168,11 @@ __global__ void depthconv_col2im_gpu_kernel(int n, scalar_t *data_col, scalar_t 
     }
 }
 
-void depthconv_im2col(torch::Tensor data_im, torch::Tensor data_depth, int64_t channels, int64_t height, int64_t width, int64_t ksize_h, int64_t ksize_w, int64_t pad_h, int64_t pad_w, int64_t stride_h, int64_t stride_w, int64_t dilation_h, int64_t dilation_w, torch::Tensor data_col) {
+void depthconv_im2col(torch::Tensor data_im, torch::Tensor data_depth, int channels, int height, int width, int ksize_h, int ksize_w, int stride_h, int stride_w, int pad_h, int pad_w, int dilation_h, int dilation_w, torch::Tensor data_col) {
     // We are going to launch channels * height_col * width_col kernels, each
     // kernel responsible for copying a single-channel grid.
-    int64_t height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
-    int64_t width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;
+    int height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
+    int width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;
     int num_kernels = channels * height_col * width_col;
     int num_blocks = (num_kernels + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
 
@@ -185,31 +185,33 @@ void depthconv_im2col(torch::Tensor data_im, torch::Tensor data_depth, int64_t c
             width,
             ksize_h,
             ksize_w,
-            pad_h,
-            pad_w,
             stride_h,
             stride_w,
+            pad_h,
+            pad_w,
             dilation_h,
             dilation_w,
             height_col,
             width_col,
-            data_col.data<scalar_t>());
+            data_col.data<scalar_t>()
+        );
     }));
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("error in depthconv_im2col: %s\n", cudaGetErrorString(err));
-        // TODO(BZ) panic
     }
+
+    cudaDeviceSynchronize();
 }
 
-void depthconv_col2im(torch::Tensor data_col, torch::Tensor data_depth, int64_t channels, int64_t height, int64_t width, int64_t ksize_h, int64_t ksize_w, int64_t pad_h, int64_t pad_w, int64_t stride_h, int64_t stride_w, int64_t dilation_h, int64_t dilation_w, torch::Tensor grad_im) {
-    int64_t height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
-    int64_t width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;
+void depthconv_col2im(torch::Tensor data_col, torch::Tensor data_depth, int channels, int height, int width, int ksize_h, int ksize_w, int stride_h, int stride_w, int pad_h, int pad_w, int dilation_h, int dilation_w, torch::Tensor grad_im) {
+    int height_col = (height + 2 * pad_h - (dilation_h * (ksize_h - 1) + 1)) / stride_h + 1;
+    int width_col = (width + 2 * pad_w - (dilation_w * (ksize_w - 1) + 1)) / stride_w + 1;
     // To avoid involving atomic operations, we will launch one kernel per
     // bottom dimension, and then in the kernel add up the top dimensions.
-    int64_t num_kernels = channels * height_col * width_col;
-    int64_t num_blocks = (num_kernels + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
+    int num_kernels = channels * height_col * width_col;
+    int num_blocks = (num_kernels + CUDA_NUM_THREADS - 1) / CUDA_NUM_THREADS;
 
     AT_DISPATCH_FLOATING_TYPES(data_col.type(), "depthconv_col2im", ([&] {
         depthconv_col2im_gpu_kernel<scalar_t><<<num_blocks, CUDA_NUM_THREADS>>>(
@@ -221,20 +223,22 @@ void depthconv_col2im(torch::Tensor data_col, torch::Tensor data_depth, int64_t 
             width,
             ksize_h,
             ksize_w,
-            pad_h,
-            pad_w,
             stride_h,
             stride_w,
+            pad_h,
+            pad_w,
             dilation_h,
             dilation_w,
             height_col,
             width_col,
-            grad_im.data<scalar_t>());
+            grad_im.data<scalar_t>()
+        );
     }));
 
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess) {
         printf("error in depthconv_col2im: %s\n", cudaGetErrorString(err));
-        // TODO(BZ) panic
     }
+
+    cudaDeviceSynchronize();
 }
